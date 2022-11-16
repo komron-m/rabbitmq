@@ -39,8 +39,10 @@ func (c *client) PublishSync(ctx context.Context, exchange, key string, mandator
 		return err
 	}
 	success := defConfirm.Wait()
-	defConfirm.Confirm(success)
-	return err
+	if !success {
+		return NewErrPublishNotAcked(exchange, key, msg)
+	}
+	return nil
 }
 
 func (c *client) RegisterQueueConsumer(p QueueConsumerParams) error {

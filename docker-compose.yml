@@ -1,0 +1,80 @@
+version: '3.1'
+
+services:
+  rabbitmq1:
+    container_name: rabbitmq1
+    image: rabbitmq:management
+    ports:
+      - "15672:15672"
+      - "5671:5671"
+      - "5672:5672"
+    volumes:
+      - "./etc/rabbitmq1.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "cluster_A"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq2:
+    container_name: rabbitmq2
+    image: rabbitmq:management
+    ports:
+      - "15673:15672"
+      - "5673:5671"
+      - "5674:5672"
+    volumes:
+      - "./etc/rabbitmq2.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "cluster_b"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq3:
+    container_name: rabbitmq3
+    image: rabbitmq:management
+    ports:
+      - "15674:15672"
+      - "5675:5671"
+      - "5676:5672"
+    volumes:
+      - "./etc/rabbitmq3.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "cluster_c"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq4:
+    container_name: rabbitmq4
+    image: rabbitmq:management
+    ports:
+      - "15675:15672"
+      - "5677:5671"
+      - "5678:5672"
+    volumes:
+      - "./etc/rabbitmq4.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "cluster_d"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq5:
+    container_name: rabbitmq5
+    image: rabbitmq:management
+    ports:
+      - "15676:15672"
+      - "5679:5671"
+      - "5680:5672"
+    volumes:
+      - "./etc/rabbitmq5.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "cluster_e"
+    networks:
+      - rabbit_cluster_network
+
+networks:
+  rabbit_cluster_network:

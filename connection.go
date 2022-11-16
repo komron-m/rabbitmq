@@ -6,19 +6,21 @@ import (
 )
 
 type ConnectionConfig struct {
-	User     string
-	Password string
-	Host     string
-	Port     string
-	Qos      int
-	amqpCfg  amqp.Config
+	User                    string
+	Password                string
+	Host                    string
+	Port                    string
+	PublisherConfirmEnabled bool
+	Qos                     int
+	AMQPConfig              amqp.Config
 }
 
+// DialConfig a handy wrapper for base "github.com/rabbitmq/amqp091-go" DialConfig function
 func DialConfig(cfg ConnectionConfig) (*amqp.Connection, error) {
 	proto := "amqp"
-	if cfg.amqpCfg.TLSClientConfig != nil {
+	if cfg.AMQPConfig.TLSClientConfig != nil {
 		proto = "amqps"
 	}
 	url := fmt.Sprintf("%s://%s:%s@%s:%s/", proto, cfg.User, cfg.Password, cfg.Host, cfg.Port)
-	return amqp.DialConfig(url, cfg.amqpCfg)
+	return amqp.DialConfig(url, cfg.AMQPConfig)
 }

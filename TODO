@@ -1,0 +1,4 @@
+SEE WHEN PUBLISH, but channel is closed
+CHECK what's with connection when NotifyClose happens ?? IS GOROUTINE ENDS ?
+ADD COMMENTS AND REFERENCES
+DESCRIBE IN README HOW TO USE AND

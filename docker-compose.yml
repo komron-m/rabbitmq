@@ -6,10 +6,8 @@ services:
     image: rabbitmq:management
     ports:
       - "15672:15672"
-      - "5671:5671"
-      - "5672:5672"
     volumes:
-      - "./etc/rabbitmq1.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
     environment:
       RABBITMQ_NODENAME: "cluster_A"
@@ -21,10 +19,8 @@ services:
     image: rabbitmq:management
     ports:
       - "15673:15672"
-      - "5673:5671"
-      - "5674:5672"
     volumes:
-      - "./etc/rabbitmq2.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
     environment:
       RABBITMQ_NODENAME: "cluster_b"
@@ -36,43 +32,22 @@ services:
     image: rabbitmq:management
     ports:
       - "15674:15672"
-      - "5675:5671"
-      - "5676:5672"
     volumes:
-      - "./etc/rabbitmq3.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
     environment:
       RABBITMQ_NODENAME: "cluster_c"
     networks:
       - rabbit_cluster_network
 
-  rabbitmq4:
-    container_name: rabbitmq4
-    image: rabbitmq:management
+  haproxy:
+    container_name: haproxy
+    image: haproxy:lts-alpine
     ports:
-      - "15675:15672"
-      - "5677:5671"
-      - "5678:5672"
+      - "5672:5672"
+      - "9005:9000"
     volumes:
-      - "./etc/rabbitmq4.conf:/etc/rabbitmq/rabbitmq.conf"
-      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
-    environment:
-      RABBITMQ_NODENAME: "cluster_d"
-    networks:
-      - rabbit_cluster_network
-
-  rabbitmq5:
-    container_name: rabbitmq5
-    image: rabbitmq:management
-    ports:
-      - "15676:15672"
-      - "5679:5671"
-      - "5680:5672"
-    volumes:
-      - "./etc/rabbitmq5.conf:/etc/rabbitmq/rabbitmq.conf"
-      - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
-    environment:
-      RABBITMQ_NODENAME: "cluster_e"
+      - "./etc/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg"
     networks:
       - rabbit_cluster_network
 

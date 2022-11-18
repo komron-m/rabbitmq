@@ -7,24 +7,31 @@ import (
 	"time"
 )
 
-func logNetworkError(a *amqp.Error, config rabbitmq.ConnectionConfig) {
-	log.Println("NetworkErrCallback:", a.Error(), "host port", config.Host, "::", config.Port)
+func logNetworkError(a *amqp.Error) {
+	log.Println("NetworkErrCallback:", a.Error())
 }
 
-func handleHouseKeepingError(err error, config rabbitmq.ConnectionConfig) bool {
-	log.Println("HousekeepingErrCallback:", err.Error(), "host port", config.Host, "::", config.Port)
+func handleHouseKeepingError(err error) bool {
+	log.Println("AutoRecoveryErrCallback:", err.Error())
 	return true
 }
 
 func main() {
 	cfg := rabbitmq.ClientConfig{
-		ConnConfigs:        getConnectionConfigs(),
+		ConnectionConfig: rabbitmq.ConnectionConfig{
+			User:                    "rabbitmq1",
+			Password:                "secret",
+			Host:                    "localhost",
+			Port:                    "5672",
+			PublisherConfirmEnabled: true,
+			Qos:                     2,
+		},
 		ConsumerParams:     getQueueConsumerParams(),
 		NetworkErrCallback: logNetworkError,
 
 		AutoRecoveryEnabled:     true,
 		AutoRecoveryInterval:    time.Minute,
-		HousekeepingErrCallback: handleHouseKeepingError,
+		AutoRecoveryErrCallback: handleHouseKeepingError,
 	}
 
 	client, err := rabbitmq.NewClient(cfg)

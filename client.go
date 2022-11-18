@@ -1,21 +1,20 @@
 package rabbitmq
 
 import (
-	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"time"
 )
 
 type ClientConfig struct {
-	// list of all connection configurations of rabbitmq nodes to connect to
-	ConnConfigs []ConnectionConfig
+	// connection configuration of rabbitmq
+	ConnectionConfig ConnectionConfig
 
 	// list of all consumers to build during initial start-up
 	// note that only these consumers will be restored after connection recovery
 	ConsumerParams []QueueConsumerParams
 
 	// this callback will be invoked whenever network failure happens or node shuts down
-	NetworkErrCallback func(*amqp.Error, ConnectionConfig)
+	NetworkErrCallback func(*amqp.Error)
 
 	// if false then below params not required
 	AutoRecoveryEnabled bool
@@ -25,25 +24,19 @@ type ClientConfig struct {
 
 	// this callback will be invoked whenever connection retry fails or resource freeing returns error
 	// returning value as bool should indicate whether to keep retrying recovery or not
-	HousekeepingErrCallback func(error, ConnectionConfig) bool
+	AutoRecoveryErrCallback func(error) bool
 }
 
 type Client struct {
 	*client
 
-	activeConnectionIndex int
-	cfg                   ClientConfig
-	conn                  *amqp.Connection
+	cfg  ClientConfig
+	conn *amqp.Connection
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
-	if len(cfg.ConnConfigs) == 0 {
-		return nil, fmt.Errorf("provide at least one rabbitmq.ConnectionConfig")
-	}
-
 	c := new(Client)
 	c.cfg = cfg
-	c.activeConnectionIndex = 0
 	if err := c.connect(); err != nil {
 		return nil, err
 	}
@@ -52,8 +45,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 func (c *Client) connect() error {
 	// initially takes first configuration
-	connCfg := c.cfg.ConnConfigs[c.activeConnectionIndex]
-	conn, err := DialConfig(connCfg)
+	conn, err := DialConfig(c.cfg.ConnectionConfig)
 	if err != nil {
 		return err
 	}
@@ -66,7 +58,7 @@ func (c *Client) connect() error {
 	if err != nil {
 		return err
 	}
-	if connCfg.PublisherConfirmEnabled {
+	if c.cfg.ConnectionConfig.PublisherConfirmEnabled {
 		if err := publisherChannel.Confirm(false); err != nil {
 			return err
 		}
@@ -77,7 +69,7 @@ func (c *Client) connect() error {
 	if err != nil {
 		return err
 	}
-	if err := consumerChannel.Qos(connCfg.Qos, 0, false); err != nil {
+	if err := consumerChannel.Qos(c.cfg.ConnectionConfig.Qos, 0, false); err != nil {
 		return err
 	}
 
@@ -100,7 +92,7 @@ func (c *Client) connect() error {
 		errNotifyChan := c.conn.NotifyClose(make(chan *amqp.Error))
 
 		for connectionErr := range errNotifyChan {
-			c.cfg.NetworkErrCallback(connectionErr, connCfg)
+			c.cfg.NetworkErrCallback(connectionErr)
 
 			if c.cfg.AutoRecoveryEnabled {
 				c.reconnect()
@@ -112,19 +104,17 @@ func (c *Client) connect() error {
 
 func (c *Client) reconnect() {
 	if err := c.Close(); err != nil {
-		shouldContinue := c.cfg.HousekeepingErrCallback(err, c.cfg.ConnConfigs[c.activeConnectionIndex])
+		shouldContinue := c.cfg.AutoRecoveryErrCallback(err)
 		if !shouldContinue {
 			return
 		}
 	}
 
-	// round-robin over connection configurations at try to connect to new node each time error happens
-	c.activeConnectionIndex += 1
-	c.activeConnectionIndex = c.activeConnectionIndex % len(c.cfg.ConnConfigs)
-
+	// try to connect
 	if err := c.connect(); err != nil {
-		shouldContinue := c.cfg.HousekeepingErrCallback(err, c.cfg.ConnConfigs[c.activeConnectionIndex])
+		shouldContinue := c.cfg.AutoRecoveryErrCallback(err)
 		if shouldContinue {
+			// when instant reconnect fails, try again after some time
 			time.AfterFunc(c.cfg.AutoRecoveryInterval, func() {
 				c.reconnect()
 			})

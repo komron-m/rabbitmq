@@ -7,14 +7,14 @@ import (
 	"log"
 )
 
-func firstConsumer(ctx context.Context, msg amqp.Delivery) {
+func firstConsumer(_ context.Context, msg amqp.Delivery) {
 	log.Println("firstConsumer body:", string(msg.Body))
 	if err := msg.Ack(false); err != nil {
 		log.Fatal("ack on first consumer failed", err.Error())
 	}
 }
 
-func secondConsumer(ctx context.Context, msg amqp.Delivery) {
+func secondConsumer(_ context.Context, msg amqp.Delivery) {
 	log.Println("secondConsumer body:", string(msg.Body))
 	if err := msg.Ack(false); err != nil {
 		log.Fatal("ack on second consumer failed", err.Error())

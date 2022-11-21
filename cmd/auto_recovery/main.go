@@ -18,6 +18,7 @@ func handleHouseKeepingError(err error) bool {
 
 func main() {
 	cfg := rabbitmq.ClientConfig{
+		// provide connection params
 		ConnectionConfig: rabbitmq.ConnectionConfig{
 			User:                    "rabbitmq1",
 			Password:                "secret",
@@ -26,11 +27,23 @@ func main() {
 			PublisherConfirmEnabled: true,
 			Qos:                     2,
 		},
-		ConsumerParams:     getQueueConsumerParams(),
+
+		// provide list of all your consumers you want to be initialized and restored after reconnection
+		ConsumerParams: getQueueConsumerParams(),
+
+		// provide a callback for your internal usage, ex: logging about network error
 		NetworkErrCallback: logNetworkError,
 
-		AutoRecoveryEnabled:     true,
-		AutoRecoveryInterval:    time.Minute,
+		//
+		AutoRecoveryEnabled: true,
+
+		// initial connection and first reconnection will be instant,
+		// if reconnection fails wait for given interval
+		AutoRecoveryInterval: time.Minute,
+
+		// during reconnection there might be more errors
+		// so through this callback you can log error and decide whether reconnection should go on
+		// by returning boolean as an indicator
 		AutoRecoveryErrCallback: handleHouseKeepingError,
 	}
 

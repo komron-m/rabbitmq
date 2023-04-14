@@ -4,8 +4,6 @@ services:
   rabbitmq1:
     container_name: rabbitmq1
     image: rabbitmq:management
-    ports:
-      - "15672:15672"
     volumes:
       - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
@@ -17,8 +15,6 @@ services:
   rabbitmq2:
     container_name: rabbitmq2
     image: rabbitmq:management
-    ports:
-      - "15673:15672"
     volumes:
       - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
@@ -30,8 +26,6 @@ services:
   rabbitmq3:
     container_name: rabbitmq3
     image: rabbitmq:management
-    ports:
-      - "15674:15672"
     volumes:
       - "./etc/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       - "./etc/.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
@@ -45,6 +39,7 @@ services:
     image: haproxy:lts-alpine
     ports:
       - "5672:5672"
+      - "15672:15672"
       - "9005:9000"
     volumes:
       - "./etc/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg"

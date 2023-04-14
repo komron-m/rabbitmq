@@ -1,6 +1,6 @@
 # !/bin/sh
 MAIN_CLUSTER_NAME=cluster_A
-MAIN_CLUSTER_HOST=c6ff647cc9ca
+MAIN_CLUSTER_HOST=6a243d836813
 
 rabbitmqctl stop_app
 

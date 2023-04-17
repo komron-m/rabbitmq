@@ -13,16 +13,6 @@ type DialConfig struct {
 	AMQPConfig amqp.Config
 }
 
-func NewDialConfig(user, password, host, port string, amqpCfg amqp.Config) DialConfig {
-	return DialConfig{
-		User:       user,
-		Password:   password,
-		Host:       host,
-		Port:       port,
-		AMQPConfig: amqpCfg,
-	}
-}
-
 // Dial a handy wrapper for base "github.com/rabbitmq/amqp091-go" DialConfig function
 func Dial(cfg DialConfig) (*amqp.Connection, error) {
 	proto := "amqp"

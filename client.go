@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"context"
-	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"sync"
 	"time"
@@ -130,10 +129,6 @@ func (c *Client) reconnect() {
 func (c *Client) Consume(consumer AMQPConsumer) error {
 	c.mx.Lock()
 	defer c.mx.Unlock()
-
-	if consumer.ConsumerParams.ConsumerID == "" {
-		consumer.ConsumerParams.ConsumerID = uuid.NewString()
-	}
 
 	c.consumers = append(c.consumers, consumer)
 

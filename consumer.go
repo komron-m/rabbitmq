@@ -2,8 +2,9 @@ package rabbitmq
 
 import (
 	"context"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // An IConsumer handles an amqp message (delivery - in terms of github.com/rabbitmq/amqp091-go library).
@@ -28,7 +29,7 @@ type LogConsumer struct {
 	count uint64
 }
 
-func (l *LogConsumer) Consume(ctx context.Context, msg amqp.Delivery) {
+func (l *LogConsumer) Consume(_ context.Context, msg amqp.Delivery) {
 	l.count++
 
 	log.Println("New message:", msg.RoutingKey)

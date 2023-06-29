@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"log"
+
 	"github.com/komron-m/rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"log"
 )
 
 func registerConsumers(client *rabbitmq.Client) error {

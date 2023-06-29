@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/komron-m/rabbitmq"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"time"
+
+	"github.com/komron-m/rabbitmq"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {

@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"context"
-	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -23,21 +22,47 @@ func (f ConsumerFunc) Consume(ctx context.Context, msg amqp.Delivery) {
 	f(ctx, msg)
 }
 
-// LogConsumer consumer which logs incoming messages
-// this is just an example, not aimed for production usage
-type LogConsumer struct {
-	count uint64
+// AMQPConsumer collects all parameters required for creating a queue and consuming messages
+type AMQPConsumer struct {
+	ExchangeParams
+	QueueParams
+	QueueBindParams
+	ConsumerParams
+
+	IConsumer
 }
 
-func (l *LogConsumer) Consume(_ context.Context, msg amqp.Delivery) {
-	l.count++
+// ExchangeParams and all other underlying structs created for compacting amqp091-go `function` parameters
+type ExchangeParams struct {
+	Name       string
+	Type       string
+	Durable    bool
+	AutoDelete bool
+	Internal   bool
+	Nowait     bool
+	Args       amqp.Table
+}
 
-	log.Println("New message:", msg.RoutingKey)
-	log.Println("Message body:", string(msg.Body))
-	log.Println("Total messages received:", l.count)
+type QueueParams struct {
+	Name       string
+	Durable    bool
+	AutoDelete bool
+	Exclusive  bool
+	Nowait     bool
+	Args       amqp.Table
+}
 
-	if err := msg.Ack(false); err != nil {
-		log.Println("Failed acknowledging message, err:", err.Error())
-	}
-	log.Println("------------------------------------")
+type QueueBindParams struct {
+	Nowait bool
+	Args   amqp.Table
+}
+
+type ConsumerParams struct {
+	RoutingKeys []string
+	ConsumerID  string
+	AutoAck     bool
+	Exclusive   bool
+	NoLocal     bool
+	Nowait      bool
+	Args        amqp.Table
 }

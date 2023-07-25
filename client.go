@@ -20,7 +20,7 @@ type ClientConfig struct {
 	ConsumerAutoRecoveryErrCallback func(AMQPConsumer, error)
 
 	// configurations for setting up dial and new connection
-	DialConfig
+	DialCfg DialConfig
 
 	PublisherConfirmEnabled bool
 	PublisherConfirmNowait  bool
@@ -31,19 +31,21 @@ type ClientConfig struct {
 }
 
 type Client struct {
-	cfg           ClientConfig
+	cfg       ClientConfig
+	consumers []AMQPConsumer
+
 	connection    *amqp.Connection
 	publisherChan *amqp.Channel
 	consumerChan  *amqp.Channel
-
-	consumers []AMQPConsumer
 
 	mx sync.RWMutex
 	wg sync.WaitGroup
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
-	client := Client{cfg: cfg}
+	client := Client{
+		cfg: cfg,
+	}
 	if err := client.connect(); err != nil {
 		return nil, err
 	}
@@ -51,8 +53,57 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return &client, nil
 }
 
+// Consume makes all necessary housekeeping stuff for creating an exchange, queue, queue-binding
+// then starts new goroutine (if IConsumer is set) which starts receiving messages from rabbitmq-server
+// safe for concurrent usage
+func (c *Client) Consume(consumer AMQPConsumer) error {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	c.consumers = append(c.consumers, consumer)
+
+	return c.consume(consumer)
+}
+
+// Publish wrapper for amqp091-go PublishWithContext
+func (c *Client) Publish(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+	return c.publisherChan.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
+}
+
+// PublishConfirm publishes message and waits for confirmation
+// make sure `PublisherConfirmEnabled` is true in configuration
+func (c *Client) PublishConfirm(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+	defConfirm, err := c.publisherChan.PublishWithDeferredConfirmWithContext(ctx, exchange, key, mandatory, immediate, msg)
+	if err != nil {
+		return err
+	}
+	success := defConfirm.Wait()
+	if !success {
+		return NewErrPublishNotAcked(exchange, key, msg)
+	}
+	return nil
+}
+
+func (c *Client) Close() error {
+	var err error
+	if !c.connection.IsClosed() {
+		err = c.publisherChan.Close()
+
+		for _, consumer := range c.consumers {
+			err = c.consumerChan.Cancel(consumer.ConsumerID, false)
+		}
+		c.wg.Wait()
+
+		err = c.consumerChan.Close()
+
+		err = c.connection.Close()
+	}
+
+	return err
+}
+
 func (c *Client) connect() error {
-	conn, err := Dial(c.cfg.DialConfig)
+	conn, err := Dial(c.cfg.DialCfg)
 	if err != nil {
 		return err
 	}
@@ -111,6 +162,7 @@ func (c *Client) reconnect() {
 	// try to connect
 	if err := c.connect(); err != nil {
 		shouldContinue := c.cfg.AutoRecoveryErrCallback(err)
+
 		if shouldContinue {
 			// when instant reconnect fails, try again after some time
 			time.AfterFunc(c.cfg.AutoRecoveryInterval, func() {
@@ -125,15 +177,6 @@ func (c *Client) reconnect() {
 			}
 		}
 	}
-}
-
-func (c *Client) Consume(consumer AMQPConsumer) error {
-	c.mx.Lock()
-	defer c.mx.Unlock()
-
-	c.consumers = append(c.consumers, consumer)
-
-	return c.consume(consumer)
 }
 
 func (c *Client) consume(consumer AMQPConsumer) error {
@@ -203,38 +246,4 @@ func (c *Client) consume(consumer AMQPConsumer) error {
 	}
 
 	return nil
-}
-
-func (c *Client) Publish(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
-	return c.publisherChan.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
-}
-
-func (c *Client) PublishConfirm(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
-	defConfirm, err := c.publisherChan.PublishWithDeferredConfirmWithContext(ctx, exchange, key, mandatory, immediate, msg)
-	if err != nil {
-		return err
-	}
-	success := defConfirm.Wait()
-	if !success {
-		return NewErrPublishNotAcked(exchange, key, msg)
-	}
-	return nil
-}
-
-func (c *Client) Close() error {
-	var err error
-	if !c.connection.IsClosed() {
-		err = c.publisherChan.Close()
-
-		for _, consumer := range c.consumers {
-			err = c.consumerChan.Cancel(consumer.ConsumerID, false)
-		}
-		c.wg.Wait()
-
-		err = c.consumerChan.Close()
-
-		err = c.connection.Close()
-	}
-
-	return err
 }

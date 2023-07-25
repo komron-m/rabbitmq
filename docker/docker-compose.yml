@@ -1,0 +1,50 @@
+version: '3.1'
+
+services:
+  rabbitmq_self_hosted:
+    container_name: rabbitmq_container_1
+    image: rabbitmq:management
+    volumes:
+      - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "rabbitmq1"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq_cloud1:
+    container_name: rabbitmq_cloud1
+    image: rabbitmq:management
+    volumes:
+      - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "rabbitmq2"
+    networks:
+      - rabbit_cluster_network
+
+  rabbitmq_cloud2:
+    container_name: rabbitmq_cloud2
+    image: rabbitmq:management
+    volumes:
+      - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
+      - "./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie"
+    environment:
+      RABBITMQ_NODENAME: "rabbitmq3"
+    networks:
+      - rabbit_cluster_network
+
+  haproxy:
+    container_name: haproxy
+    image: haproxy:lts-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "9005:9000"
+    volumes:
+      - "./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg"
+    networks:
+      - rabbit_cluster_network
+
+networks:
+  rabbit_cluster_network:

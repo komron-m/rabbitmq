@@ -3,36 +3,13 @@ package rabbitmq
 import (
 	"context"
 	"sync"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type ClientConfig struct {
-	// this callback will be invoked whenever network failure happens or node shuts down
-	NetworkErrCallback func(*amqp.Error)
-	// note that this interval is taken into account when on reconnecting multiple times in row
-	AutoRecoveryInterval time.Duration
-	// this callback will be invoked whenever connection retry fails or resource freeing returns error
-	// returning value as bool should indicate whether to keep retrying recovery or not
-	AutoRecoveryErrCallback func(error) bool
-	// this callback will be called if restoring a consumer fails after recovery procedure
-	ConsumerAutoRecoveryErrCallback func(AMQPConsumer, error)
-
-	// configurations for setting up dial and new connection
-	DialCfg DialConfig
-
-	PublisherConfirmEnabled bool
-	PublisherConfirmNowait  bool
-
-	ConsumerQos          int
-	ConsumerPrefetchSize int
-	ConsumerGlobal       bool
-}
-
 type Client struct {
-	cfg       ClientConfig
-	consumers []AMQPConsumer
+	cfg       Config
+	consumers []ConsumerParams
 
 	connection    *amqp.Connection
 	publisherChan *amqp.Channel
@@ -42,10 +19,11 @@ type Client struct {
 	wg sync.WaitGroup
 }
 
-func NewClient(cfg ClientConfig) (*Client, error) {
+func NewClient(cfg Config) (*Client, error) {
 	client := Client{
 		cfg: cfg,
 	}
+
 	if err := client.connect(); err != nil {
 		return nil, err
 	}
@@ -53,57 +31,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return &client, nil
 }
 
-// Consume makes all necessary housekeeping stuff for creating an exchange, queue, queue-binding
-// then starts new goroutine (if IConsumer is set) which starts receiving messages from rabbitmq-server
-// safe for concurrent usage
-func (c *Client) Consume(consumer AMQPConsumer) error {
-	c.mx.Lock()
-	defer c.mx.Unlock()
-
-	c.consumers = append(c.consumers, consumer)
-
-	return c.consume(consumer)
-}
-
-// Publish wrapper for amqp091-go PublishWithContext
-func (c *Client) Publish(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
-	return c.publisherChan.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
-}
-
-// PublishConfirm publishes message and waits for confirmation
-// make sure `PublisherConfirmEnabled` is true in configuration
-func (c *Client) PublishConfirm(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
-	defConfirm, err := c.publisherChan.PublishWithDeferredConfirmWithContext(ctx, exchange, key, mandatory, immediate, msg)
-	if err != nil {
-		return err
-	}
-	success := defConfirm.Wait()
-	if !success {
-		return NewErrPublishNotAcked(exchange, key, msg)
-	}
-	return nil
-}
-
-func (c *Client) Close() error {
-	var err error
-	if !c.connection.IsClosed() {
-		err = c.publisherChan.Close()
-
-		for _, consumer := range c.consumers {
-			err = c.consumerChan.Cancel(consumer.ConsumerID, false)
-		}
-		c.wg.Wait()
-
-		err = c.consumerChan.Close()
-
-		err = c.connection.Close()
-	}
-
-	return err
-}
-
 func (c *Client) connect() error {
-	conn, err := Dial(c.cfg.DialCfg)
+	conn, err := Dial(c.cfg.DialParams)
 	if err != nil {
 		return err
 	}
@@ -125,11 +54,9 @@ func (c *Client) connect() error {
 	if err != nil {
 		return err
 	}
-	if err := consumerChannel.Qos(
-		c.cfg.ConsumerQos,
-		c.cfg.ConsumerPrefetchSize,
-		c.cfg.ConsumerGlobal,
-	); err != nil {
+
+	qosParams := c.cfg.QOSParams
+	if err := consumerChannel.Qos(qosParams.PrefetchCount, qosParams.PrefetchSize, qosParams.Global); err != nil {
 		return err
 	}
 
@@ -143,43 +70,51 @@ func (c *Client) connect() error {
 
 		for connectionErr := range errNotifyChan {
 			c.cfg.NetworkErrCallback(connectionErr)
-
-			c.reconnect()
+			break
 		}
 	}()
 
 	return nil
 }
 
-func (c *Client) reconnect() {
-	if err := c.Close(); err != nil {
-		shouldContinue := c.cfg.AutoRecoveryErrCallback(err)
-		if !shouldContinue {
-			return
-		}
-	}
-
-	// try to connect
-	if err := c.connect(); err != nil {
-		shouldContinue := c.cfg.AutoRecoveryErrCallback(err)
-
-		if shouldContinue {
-			// when instant reconnect fails, try again after some time
-			time.AfterFunc(c.cfg.AutoRecoveryInterval, func() {
-				c.reconnect()
-			})
-		}
-	} else {
-		// connection was successful, so restore consumers
-		for _, consumerParam := range c.consumers {
-			if err := c.consume(consumerParam); err != nil {
-				c.cfg.ConsumerAutoRecoveryErrCallback(consumerParam, err)
-			}
-		}
-	}
+// Publish wrapper for amqp091-go PublishWithContext
+func (c *Client) Publish(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+	return c.publisherChan.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
 }
 
-func (c *Client) consume(consumer AMQPConsumer) error {
+// PublishConfirm publishes message and waits for confirmation
+// make sure `PublisherConfirmEnabled` is true in configuration
+func (c *Client) PublishConfirm(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+	defConfirm, err := c.publisherChan.PublishWithDeferredConfirm(exchange, key, mandatory, immediate, msg)
+	if err != nil {
+		return err
+	}
+
+	acked, err := defConfirm.WaitContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !acked {
+		return NewErrPublishNotAcked(exchange, key, msg)
+	}
+
+	return nil
+}
+
+// Consume makes all necessary housekeeping stuff for creating an exchange, queue, queue-binding
+// then starts new goroutine (if IConsumer is set) which starts receiving messages from rabbitmq-server
+// safe for concurrent usage
+func (c *Client) Consume(consumer ConsumerParams) error {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	c.consumers = append(c.consumers, consumer)
+
+	return c.consume(consumer)
+}
+
+func (c *Client) consume(consumer ConsumerParams) error {
 	if err := c.consumerChan.ExchangeDeclare(
 		consumer.ExchangeParams.Name,
 		consumer.ExchangeParams.Type,
@@ -204,14 +139,14 @@ func (c *Client) consume(consumer AMQPConsumer) error {
 		return err
 	}
 
-	for _, key := range consumer.RoutingKeys {
+	for _, routingKey := range consumer.RoutingKeys {
 		// The default exchange is a `direct type` with no name (empty string) pre-declared by the broker.
 		// It has one special property that makes it very useful for simple applications:
 		// every queue that is created is automatically bound to it with a routing event which is the same as the queue name.
 		if consumer.ExchangeParams.Name != "" {
 			if err := c.consumerChan.QueueBind(
 				queue.Name,
-				key,
+				routingKey,
 				consumer.ExchangeParams.Name,
 				consumer.QueueBindParams.Nowait,
 				consumer.QueueBindParams.Args,
@@ -224,12 +159,12 @@ func (c *Client) consume(consumer AMQPConsumer) error {
 	if consumer.IConsumer != nil {
 		deliveries, err := c.consumerChan.Consume(
 			consumer.QueueParams.Name,
-			consumer.ConsumerParams.ConsumerID,
-			consumer.ConsumerParams.AutoAck,
-			consumer.ConsumerParams.Exclusive,
-			consumer.ConsumerParams.NoLocal,
-			consumer.ConsumerParams.Nowait,
-			consumer.ConsumerParams.Args,
+			consumer.RoutingParams.ConsumerID,
+			consumer.RoutingParams.AutoAck,
+			consumer.RoutingParams.Exclusive,
+			consumer.RoutingParams.NoLocal,
+			consumer.RoutingParams.Nowait,
+			consumer.RoutingParams.Args,
 		)
 		if err != nil {
 			return err
@@ -246,4 +181,23 @@ func (c *Client) consume(consumer AMQPConsumer) error {
 	}
 
 	return nil
+}
+
+func (c *Client) Close() error {
+	var err error
+
+	if !c.connection.IsClosed() {
+		err = c.publisherChan.Close()
+
+		for _, consumer := range c.consumers {
+			err = c.consumerChan.Cancel(consumer.ConsumerID, false)
+		}
+		c.wg.Wait()
+
+		err = c.consumerChan.Close()
+
+		err = c.connection.Close()
+	}
+
+	return err
 }

@@ -22,17 +22,16 @@ func (f ConsumerFunc) Consume(ctx context.Context, msg amqp.Delivery) {
 	f(ctx, msg)
 }
 
-// AMQPConsumer collects all parameters required for creating a queue and consuming messages
-type AMQPConsumer struct {
+// ConsumerParams collects all parameters required for creating a queue and consuming messages
+type ConsumerParams struct {
 	ExchangeParams
 	QueueParams
 	QueueBindParams
-	ConsumerParams
+	RoutingParams
 
 	IConsumer
 }
 
-// ExchangeParams and all other underlying structs created for compacting amqp091-go `function` parameters
 type ExchangeParams struct {
 	Name       string
 	Type       string
@@ -57,7 +56,7 @@ type QueueBindParams struct {
 	Args   amqp.Table
 }
 
-type ConsumerParams struct {
+type RoutingParams struct {
 	RoutingKeys []string
 	ConsumerID  string
 	AutoAck     bool

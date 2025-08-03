@@ -6,20 +6,12 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type DialConfig struct {
-	User       string
-	Password   string
-	Host       string
-	Port       string
-	AMQPConfig amqp.Config
-}
-
 // Dial a handy wrapper for base "github.com/rabbitmq/amqp091-go" DialConfig function
-func Dial(cfg DialConfig) (*amqp.Connection, error) {
+func Dial(params DialParams) (*amqp.Connection, error) {
 	proto := "amqp"
-	if cfg.AMQPConfig.TLSClientConfig != nil {
+	if params.AMQPConfig.TLSClientConfig != nil {
 		proto = "amqps"
 	}
-	url := fmt.Sprintf("%s://%s:%s@%s:%s/", proto, cfg.User, cfg.Password, cfg.Host, cfg.Port)
-	return amqp.DialConfig(url, cfg.AMQPConfig)
+	url := fmt.Sprintf("%s://%s:%s@%s:%s/", proto, params.User, params.Password, params.Host, params.Port)
+	return amqp.DialConfig(url, params.AMQPConfig)
 }

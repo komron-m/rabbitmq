@@ -1,8 +1,5 @@
 module github.com/komron-m/rabbitmq
 
-go 1.19
+go 1.24.5
 
-require (
-	github.com/google/uuid v1.3.0
-	github.com/rabbitmq/amqp091-go v1.8.0
-)
+require github.com/rabbitmq/amqp091-go v1.10.0
